@@ -157,21 +157,19 @@ class ProfilingPanel(Panel):
             self._unwrap_closure_and_profile(subfunc)
         if func.__closure__:
             for cell in func.__closure__:
-                if hasattr(cell.cell_contents, '__code__'):
-                    self._unwrap_closure_and_profile(cell.cell_contents)
+                target = cell.cell_contents
+                if inspect.isclass(target) and View in inspect.getmro(target):
+                    for name, value in inspect.getmembers(target):
+                        if name[0] != '_' and inspect.ismethod(value):
+                            self._unwrap_closure_and_profile(value)
+                else:
+                    self._unwrap_closure_and_profile(target)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         self.profiler = cProfile.Profile()
         args = (request,) + view_args
         self.line_profiler = LineProfiler()
         self._unwrap_closure_and_profile(view_func)
-        if view_func.func_globals['__name__'] == 'django.views.generic.base':
-            for cell in view_func.func_closure:
-                target = cell.cell_contents
-                if inspect.isclass(target) and View in inspect.getmro(target):
-                    for name, value in inspect.getmembers(target):
-                        if name[0] != '_' and inspect.ismethod(value):
-                            self._unwrap_closure_and_profile(value)
         self.line_profiler.enable_by_count()
         out = self.profiler.runcall(view_func, *args, **view_kwargs)
         self.line_profiler.disable_by_count()
